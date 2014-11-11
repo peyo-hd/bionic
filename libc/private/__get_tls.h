@@ -32,7 +32,34 @@
 #if defined(__aarch64__)
 # define __get_tls() ({ void** __val; __asm__("mrs %0, tpidr_el0" : "=r"(__val)); __val; })
 #elif defined(__arm__)
-# define __get_tls() ({ void** __val; __asm__("mrc p15, 0, %0, c13, c0, 3" : "=r"(__val)); __val; })
+#if defined(__thumb__) && !defined(__thumb2__)
+#  define  __TLS_SWITCH_TO_ARM \
+            "adr r3, 5f\n" \
+            "bx  r3\n" \
+            ".align\n" \
+            ".arm\n" \
+        "5:\n"
+/* note: the leading \n below is intentional */
+#  define __TLS_SWITCH_TO_THUMB \
+            "\n" \
+            "adr r3, 6f+1\n" \
+            "bx  r3\n" \
+            ".thumb\n" \
+        "6:\n"
+#  define __TLS_CLOBBERS   "r3"  /* list of clobbered registers */
+#else
+#  define  __TLS_SWITCH_TO_ARM   /* nothing */
+#  define  __TLS_SWITCH_TO_THUMB /* nothing */
+#  define  __TLS_CLOBBERS        /* nothing */
+#endif /* defined(__thumb__) && !defined(__thumb2__) */
+# define __get_tls() \
+    ({ void** __val; \
+       __asm__( \
+               __TLS_SWITCH_TO_ARM \
+               "mrc p15, 0, %0, c13, c0, 3" \
+               __TLS_SWITCH_TO_THUMB \
+               : "=r"(__val) : : __TLS_CLOBBERS); \
+       __val; })
 #elif defined(__mips__)
 # define __get_tls() \
     /* On mips32r1, this goes via a kernel illegal instruction trap that's optimized for v1. */ \
