@@ -273,7 +273,8 @@ arch_variant := $(TARGET_ARCH_VARIANT)
 endif
 
 # Use the C version on armv7-a since it doesn't support neon instructions.
-ifneq ($(arch_variant),armv7-a)
+ifeq (,$(filter armv7-a armv6k,$(arch_variant)))
+
 LOCAL_SRC_FILES_arm += \
     arm/sqrt.S \
     arm/floor.S \
