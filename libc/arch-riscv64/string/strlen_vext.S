@@ -53,6 +53,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if defined(__riscv_v)
+
 #include <private/bionic_asm.h>
 
 #define iResult a0
@@ -66,7 +68,7 @@
 #define vStr v0
 #define vMaskEnd v2
 
-ENTRY(strlen)
+ENTRY(strlen_vext)
 
     mv pCopyStr, pStr
 L(loop):
@@ -85,3 +87,5 @@ L(loop):
     ret
 
 END(strlen)
+
+#endif

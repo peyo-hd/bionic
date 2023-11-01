@@ -53,44 +53,69 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if defined(__riscv_v)
+
 #include <private/bionic_asm.h>
 
-#define iResult a0
+#define pDst a0
+#define pSrc a1
+#define iLength a2
+#define pDstPtr a3
 
-#define pSrc a0
-#define iValue a1
-#define iNum a2
+#define iVL a4
+#define iCurrentVL a5
+#define iActiveElemPos a6
 
-#define iVL a3
-#define iTemp a4
+#define ELEM_LMUL_SETTING m1
+#define vMask1 v0
+#define vMask2 v1
+#define vStr1 v8
+#define vStr2 v16
 
-#define ELEM_LMUL_SETTING m8
-#define vData v0
-#define vMask v8
+ENTRY(strncat_vext)
 
-ENTRY(memchr)
+    mv pDstPtr, pDst
 
-L(loop):
-    vsetvli iVL, iNum, e8, ELEM_LMUL_SETTING, ta, ma
+    // the strlen of dst
+L(strlen_loop):
+    vsetvli iVL, zero, e8, ELEM_LMUL_SETTING, ta, ma
 
-    vle8ff.v vData, (pSrc)
-    vmseq.vx vMask, vData, iValue
-    vfirst.m iTemp, vMask
+    vle8ff.v vStr1, (pDstPtr)
+    // find the '\0'
+    vmseq.vx vMask1, vStr1, zero
+    csrr iCurrentVL, vl
+    vfirst.m iActiveElemPos, vMask1
+    add pDstPtr, pDstPtr, iCurrentVL
+    bltz iActiveElemPos, L(strlen_loop)
 
-    # skip the loop if we find the matched value.
-    bgez iTemp, L(found)
+    sub pDstPtr, pDstPtr, iCurrentVL
+    add pDstPtr, pDstPtr, iActiveElemPos
 
-    csrr iVL, vl
-    sub iNum, iNum, iVL
-    add pSrc, pSrc, iVL
+    // copy pSrc to pDstPtr
+L(strcpy_loop):
+    vsetvli iVL, iLength, e8, ELEM_LMUL_SETTING, ta, ma
 
-    bnez iNum, L(loop)
+    vle8ff.v vStr1, (pSrc)
+    vmseq.vx vMask2, vStr1, zero
+    csrr iCurrentVL, vl
+    vfirst.m iActiveElemPos, vMask2
+    vmsif.m vMask1, vMask2
+    add pSrc, pSrc, iCurrentVL
+    sub iLength, iLength, iCurrentVL
+    vse8.v vStr1, (pDstPtr), vMask1.t
+    add pDstPtr, pDstPtr, iCurrentVL
+    beqz iLength, L(fill_zero)
+    bltz iActiveElemPos, L(strcpy_loop)
 
-    li iResult, 0
     ret
 
-L(found):
-    add iResult, pSrc, iTemp
+L(fill_zero):
+    bgez iActiveElemPos, L(fill_zero_end)
+    sb zero, (pDstPtr)
+
+L(fill_zero_end):
     ret
 
-END(memchr)
+END(strncat_vext)
+
+#endif
